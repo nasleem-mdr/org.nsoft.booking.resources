@@ -55,14 +55,48 @@ public class MNSBooking extends X_NS_Booking implements DocAction {
     }
 
     @Override
-    protected boolean beforeSave(boolean newRecord) {
-        // Validasi Bisnis: Pastikan Waktu Selesai tidak mendahului Waktu Mulai
-        if (getEndDate().before(getStartDate())) {
-            log.saveError("Error", "Waktu selesai (End Date) tidak boleh sebelum waktu mulai (Start Date).");
-            return false;
-        }
-        return true;
+protected boolean beforeSave(boolean newRecord) {
+    // 1. Validasi standar tanggal
+    if (getEndDate().before(getStartDate())) {
+        log.saveError("Error", "Waktu selesai tidak boleh sebelum waktu mulai.");
+        return false;
     }
+
+    // 2. Cek Overlap hanya dengan dokumen yang SUDAH COMPLETED (Sudah Resmi Terbooking)
+    if (isOverlapWithConfirmedBooking()) {
+        log.saveError("Error", "Kendaraan ini sudah resmi di-booking oleh user lain pada rentang waktu tersebut.");
+        return false;
+    }
+
+    return true;
+}
+
+/**
+ * Fungsi untuk memeriksa apakah jadwal menabrak booking lain yang sudah CONFIRMED
+ */
+private boolean isOverlapWithConfirmedBooking() {
+    // Query untuk mencari apakah ada dokumen lain untuk mobil yang sama,
+    // di rentang waktu yang bersinggungan, DAN statusnya SUDAH COMPLETED ('CO')
+    String whereClause = "NS_Booking_ID != ? AND S_Resource_ID = ? "
+                       + "AND DocStatus = 'CO' " // KUNCINYA DI SINI: Hanya cek yang sudah Completed
+                       + "AND ( "
+                       + "  (StartDate <= ? AND EndDate >= ?) OR " // Kasus bertindihan di dalam
+                       + "  (StartDate <= ? AND EndDate >= ?) OR "
+                       + "  (? <= StartDate AND ? >= EndDate) "
+                       + ")";
+
+    int count = new Query(getCtx(), Table_Name, whereClause, get_TrxName())
+            .setParameters(
+                getNS_Booking_ID(), 
+                getS_Resource_ID(),
+                getStartDate(), getStartDate(),
+                getEndDate(), getEndDate(),
+                getStartDate(), getEndDate()
+            )
+            .count();
+
+    return count > 0;
+}
 
 
     // =========================================================================
@@ -75,22 +109,34 @@ public class MNSBooking extends X_NS_Booking implements DocAction {
         DocumentEngine engine = new DocumentEngine(this, getDocStatus());
         return engine.processIt(action, getDocAction());
     }
-
-    @Override
-    public String prepareIt() {
-        log.info("prepareIt - " + toString());
-        m_processMsg = ModelValidationEngine.get().fireDocValidate(this, ModelValidator.TIMING_BEFORE_PREPARE);
-        if (m_processMsg != null)
-            return DocAction.STATUS_Invalid;
+@Override
+public String prepareIt() {
+    log.info("prepareIt - " + toString());
+    
+    // Cek ulang saat akan di-approve, siapa tahu selama dokumen ini jadi Draft,
+    // sudah ada orang lain yang menyalip dan statusnya sudah Completed duluan.
+    if (isOverlapWithConfirmedBooking()) {
+        m_processMsg = "Gagal memproses. Kendaraan sudah terlanjur disetujui untuk booking user lain.";
+        return DocAction.STATUS_Invalid;
+    }
+    
+    return DocAction.STATUS_InProgress;
+}
+    //@Override
+   // public String prepareIt() {
+       // log.info("prepareIt - " + toString());
+      //  m_processMsg = ModelValidationEngine.get().fireDocValidate(this, ModelValidator.TIMING_BEFORE_PREPARE);
+      //  if (m_processMsg != null)
+        //    return DocAction.STATUS_Invalid;
 
         // Tambahkan logika validasi di sini jika diperlukan sebelum masuk ke workflow
         // Contoh: Cek ketersediaan mobil (S_Resource_ID) di rentang tanggal tersebut.
 
-        if (!DOCACTION_Complete.equals(getDocAction()))
-            setDocAction(DOCACTION_Complete);
+      //  if (!DOCACTION_Complete.equals(getDocAction()))
+         //   setDocAction(DOCACTION_Complete);
         
-        return DocAction.STATUS_InProgress;
-    }
+      //  return DocAction.STATUS_InProgress;
+ //   }
 
     @Override
     public boolean approveIt() {
