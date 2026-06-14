@@ -70,19 +70,31 @@ protected boolean beforeSave(boolean newRecord) {
 
     return true;
 }
-
-/**
- * Fungsi untuk memeriksa apakah jadwal menabrak booking lain yang sudah CONFIRMED
- */
 private boolean isOverlapWithConfirmedBooking() {
-    // Query untuk mencari apakah ada dokumen lain untuk mobil yang sama,
-    // di rentang waktu yang bersinggungan, DAN statusnya SUDAH COMPLETED ('CO')
+    // LOGIKA IoT: 
+    // Jika StopDate sudah terisi (mobil sudah lewat gerbang masuk), gunakan StopDate.
+    // Jika StopDate masih null, periksa: apakah waktu sekarang sudah melewati EndDate?
+    // Jika YA (artinya mobil telat pulang), gunakan waktu sekarang (NOW()) sebagai batas akhir, karena mobil masih di jalan!
+    // Jika TIDAK (mobil masih dalam rentang waktu normal), gunakan estimasi EndDate.
+
     String whereClause = "NS_Booking_ID != ? AND S_Resource_ID = ? "
-                       + "AND DocStatus = 'CO' " // KUNCINYA DI SINI: Hanya cek yang sudah Completed
+                       + "AND DocStatus = 'CO' " 
                        + "AND ( "
-                       + "  (StartDate <= ? AND EndDate >= ?) OR " // Kasus bertindihan di dalam
-                       + "  (StartDate <= ? AND EndDate >= ?) OR "
-                       + "  (? <= StartDate AND ? >= EndDate) "
+                       + "  (StartDate <= ? AND CASE "
+                       + "                      WHEN StopDate IS NOT NULL THEN StopDate "
+                       + "                      WHEN NOW() > EndDate THEN NOW() "
+                       + "                      ELSE EndDate "
+                       + "                    END >= ?) OR " 
+                       + "  (StartDate <= ? AND CASE "
+                       + "                      WHEN StopDate IS NOT NULL THEN StopDate "
+                       + "                      WHEN NOW() > EndDate THEN NOW() "
+                       + "                      ELSE EndDate "
+                       + "                    END >= ?) OR "
+                       + "  (? <= StartDate AND ? >= CASE "
+                       + "                             WHEN StopDate IS NOT NULL THEN StopDate "
+                       + "                             WHEN NOW() > EndDate THEN NOW() "
+                       + "                             ELSE EndDate "
+                       + "                           END) "
                        + ")";
 
     int count = new Query(getCtx(), Table_Name, whereClause, get_TrxName())
@@ -97,7 +109,6 @@ private boolean isOverlapWithConfirmedBooking() {
 
     return count > 0;
 }
-
 
     // =========================================================================
     // IMPLEMENTASI INTERFACE DOCACTION (WORKFLOW & APPROVAL READY)
