@@ -19,6 +19,7 @@ CREATE TABLE NS_Booking (
     
     -- Kolom Utama Bisnis (Spesifik Booking Kendaraan)
     S_Resource_ID NUMERIC(10) NOT NULL,            -- FK ke tabel Kendaraan (S_Resource)
+    S_ResourceAssignment_ID NUMERIC(10) NOT NULL, 
     AD_User_ID NUMERIC(10) NOT NULL,               -- Driver / Pemesan Utama
     StartDate TIMESTAMP NOT NULL,                  -- Waktu Mulai Pinjam
     EndDate TIMESTAMP NOT NULL,                    -- Perkiraan Waktu Kembali
@@ -32,5 +33,7 @@ CREATE TABLE NS_Booking (
     
     CONSTRAINT ns_booking_pk PRIMARY KEY (NS_Booking_ID),
     CONSTRAINT ns_booking_documentno_uq UNIQUE (AD_Client_ID, DocumentNo),
-    CONSTRAINT ns_booking_resource_fk FOREIGN KEY (S_Resource_ID) REFERENCES S_Resource(S_Resource_ID)
+    CONSTRAINT ns_booking_resource_fk FOREIGN KEY (S_Resource_ID) REFERENCES S_Resource(S_Resource_ID),
+    CONSTRAINT ns_booking_resourceassignment_fk FOREIGN KEY (S_ResourceAssigment_ID) REFERENCES S_Resource(S_Resource_ID)
+);
 );
