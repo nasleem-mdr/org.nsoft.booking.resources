@@ -23,6 +23,7 @@ CREATE TABLE NS_Booking (
     AD_User_ID NUMERIC(10) NOT NULL,               -- Driver / Pemesan Utama
     StartDate TIMESTAMP NOT NULL,                  -- Waktu Mulai Pinjam
     EndDate TIMESTAMP NOT NULL,                    -- Perkiraan Waktu Kembali
+    StopDate TIMESTAMP NULL,                        -- Waktu berakhir by security gate/iot/admin
     
     -- Kolom Wajib untuk Workflow / Approval (DocAction Ready)
     DocStatus CHAR(2) DEFAULT 'DR' NOT NULL,       -- Status Dokumen (DR=Draft, CO=Completed, IP=In Progress, dll)
