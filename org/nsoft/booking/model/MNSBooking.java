@@ -105,28 +105,69 @@ public class MNSBooking extends X_NS_Booking implements DocAction {
         setIsApproved(false);
         return true;
     }
-
+    
     @Override
     public String completeIt() {
-        log.info("completeIt - " + toString());
-        
-        // Logika Eksekusi Utama Saat Dokumen Disetujui (Completed)
-        // Di sinilah tim Anda nanti bisa menyisipkan pemicu (trigger) untuk Push Notification.
-        
+    log.info("completeIt - " + toString());
+    
+        // -------------------------------------------------------------------------
+        // LOGIKA SINKRONISASI KE CORE IDEMPIERE (MResourceAssignment)
+        // -------------------------------------------------------------------------
+        MResourceAssignment assignment = null;
+    
+        // Cek apakah record ini sudah pernah sinkron sebelumnya (mencegah duplikasi saat re-activate)
+        int existingAssignmentID = get_ValueAsInt("S_ResourceAssignment_ID"); 
+    
+        if (existingAssignmentID > 0) {
+            assignment = new MResourceAssignment(getCtx(), existingAssignmentID, get_TrxName());
+        } else {
+            assignment = new MResourceAssignment(getCtx(), 0, get_TrxName());
+        }
+    
+        // Isi data Core dari data Custom NS_Booking Anda
+        assignment.setAD_Org_ID(getAD_Org_ID());
+        assignment.setS_Resource_ID(getS_Resource_ID());
+        assignment.setName("Booking Kendaraan: " + getDocumentNo());
+        assignment.setDescription(getDescription());
+        assignment.setAssignDateFrom(getStartDate());
+        assignment.setAssignDateTo(getEndDate());
+    
+        // Simpan ke tabel core
+        if (assignment.save(get_TrxName())) {
+           // Simpan balik ID Resource Assignment ke tabel NS_Booking Anda sebagai referensi (FK balik)
+           this.set_ValueNoCheck("S_ResourceAssignment_ID", assignment.getS_ResourceAssignment_ID());
+        } else {
+           m_processMsg = "Gagal menyinkronkan data ke sistem Core Resource Assignment.";
+           return DocAction.STATUS_Invalid;
+        }
+        // -------------------------------------------------------------------------
+    
         setProcessed(true);
         setDocAction(DOCACTION_Close);
         return DocAction.STATUS_Completed;
     }
-
+    
     @Override
     public boolean voidIt() {
-        log.info("voidIt - " + toString());
-        // Batalkan pesanan, buka kembali slot resource kendaraan
+      log.info("voidIt - " + toString());
+    
+      // Hapus atau batalkan alokasi di tabel core jika ada
+      int existingAssignmentID = get_ValueAsInt("S_ResourceAssignment_ID");
+      if (existingAssignmentID > 0) {
+        MResourceAssignment assignment = new MResourceAssignment(getCtx(), existingAssignmentID, get_TrxName());
+        
+          // Opsi 1: Hapus datanya dari core
+          assignment.delete(true, get_TrxName());
+        
+          // Opsi 2: Jika tidak mau dihapus, Anda bisa set tanggalnya jadi null / diubah namanya menjadi "CANCELED"
+          this.set_ValueNoCheck("S_ResourceAssignment_ID", null);
+       }
+    
         setProcessed(true);
         setDocAction(DOCACTION_None);
         return true;
     }
-
+    
     @Override
     public boolean closeIt() {
         log.info("closeIt - " + toString());
